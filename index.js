@@ -28,8 +28,14 @@ const oauth2Client = new google.auth.OAuth2(
 
 // Check if credentials are set
 try {
-  const credentials = fs.readFileSync("credentials.json");
-  oauth2Client.setCredentials(JSON.parse(credentials));
+  const credentials = {
+    access_token: process.env.ACCESS_TOKEN,
+    refresh_token: process.env.REFRESH_TOKEN,
+    scope: process.env.SCOPE,
+    token_type: process.env.TOKEN_TYPE,
+    expiry_date: process.env.EXPIRY_DATE,
+  };
+  oauth2Client.setCredentials(credentials);
 } catch (error) {
   console.log("No credentials found", error);
 }
