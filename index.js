@@ -2,28 +2,38 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { ObjectId } from "mongodb";
-
+import cors from "cors";
+import formidable from "formidable";
 import { google } from "googleapis";
 import express from "express";
 import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
+import bodyParser from "body-parser";
 mongoose.set("strict", false);
 mongoose.connect(process.env.DB_HOST);
 
 import Book from "./models/bookModel.js";
 import User from "./models/userModel.js";
 
-import { deleteLocalFiles } from "./utils/functions.js";
-
 const app = express();
+app.use(
+  cors({
+    credentials: true,
+    origin: ["http://localhost:3000", process.env.FRONTEND_PUBLIC_URL],
+  })
+);
 app.use(express.json());
+app.use(bodyParser.json({ limit: "1gb" }));
+app.use(bodyParser.urlencoded({ limit: "1gb", extended: true }));
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
   process.env.CLIENT_SECRET,
   process.env.REDIRECT_URI
 );
+
+const drive = google.drive({ version: "v3", auth: oauth2Client });
 
 // Check if credentials are set
 try {
@@ -72,89 +82,86 @@ app.get("/api/books", async (req, res) => {
   }
 });
 
-// Create a new book
-app.post("/api/books", async (req, res) => {
-  const {
-    title,
-    authorId: author,
-    createdBy,
-    description,
-    pdfBase64,
-    coverImageBase64,
-    language,
-    tags,
-  } = req.body;
-
-  if (!title || !pdfBase64 || !coverImageBase64) {
-    return res
-      .status(400)
-      .send("Both PDF and cover image base64 are required.");
+// Función para subir archivo a Google Drive
+const uploadToGoogleDrive = async (file) => {
+  console.log("file -------->", file);
+  console.log("filepath -------->", file[0].filepath);
+  console.log("mimeType -------->", file[0].mimetype);
+  if (!file[0] || !file[0].filepath || !file[0].mimetype) {
+    throw new Error("Archivo no válido o ruta de archivo faltante");
   }
 
-  const pdfBuffer = Buffer.from(pdfBase64, "base64");
-  const coverImageBuffer = Buffer.from(coverImageBase64, "base64");
-
-  // Configuración de Google Drive
-  const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-  // Subir archivo PDF
-  let pdfDriveResponse;
   try {
-    pdfDriveResponse = await drive.files.create({
+    const response = await drive.files.create({
       requestBody: {
-        name: `${title}.pdf`,
-        mimeType: "application/pdf",
+        name: file[0].originalFilename,
+        mimeType: file[0].mimetype,
         parents: [process.env.DRIVE_FOLDER_ID],
       },
       media: {
-        mimeType: "application/pdf",
-        body: pdfBuffer,
+        mimeType: file[0].mimetype,
+        body: fs.createReadStream(file[0].filepath),
       },
     });
+    return `https://drive.google.com/uc?id=${response.data.id}`;
   } catch (error) {
-    return res.status(500).send(error);
+    console.error("Error uploading file to Google Drive", error);
+    throw new Error("Error uploading file");
   }
+};
 
-  // Subir imagen de portada
-  let coverImageDriveResponse;
-  try {
-    coverImageDriveResponse = await drive.files.create({
-      requestBody: {
-        name: `${title}-cover.jpg`,
-        mimeType: "image/jpeg",
-        parents: [process.env.DRIVE_FOLDER_ID],
-      },
-      media: {
-        mimeType: "image/jpeg",
-        body: coverImageBuffer,
-      },
-    });
-  } catch (error) {
-    return res.status(500).send(error);
-  }
+app.post("/api/books", (req, res) => {
+  const form = formidable();
 
-  // Crear el objeto libro con URLs de Google Drive
-  const newBook = new Book({
-    title,
-    author: author || "",
-    createdBy,
-    description,
-    pdfUrl: `https://drive.google.com/uc?id=${pdfDriveResponse.data.id}`,
-    coverImageUrl: `https://drive.google.com/uc?id=${coverImageDriveResponse.data.id}`,
-    publishedDate: new Date(),
-    genreIds: [],
-    language,
-    tags: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("Error parsing the files", err);
+      return res.status(500).send("Error processing the form");
+    }
+
+    // Extracción de campos y archivos
+    const { author, createdBy, description, language, tags } = fields;
+    const title = Array.isArray(fields.title) ? fields.title[0] : fields.title;
+
+    console.log("files", files);
+    const { pdfUrl, coverImage } = files;
+
+    console.log("pdfUrl", pdfUrl);
+    console.log("coverImage", coverImage);
+
+    try {
+      // Validar si los archivos están presentes
+      if (!pdfUrl || !coverImage) {
+        throw new Error("Archivos PDF o de portada faltantes");
+      }
+
+      const pdfUrlGoogleDrive = await uploadToGoogleDrive(
+        pdfUrl,
+        "application/pdf"
+      );
+      const coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
+
+      // Crear y guardar el nuevo libro
+      const newBook = new Book({
+        title,
+        author: author,
+        createdBy: new ObjectId("657384bf6e9a75c2d37aa7c9"),
+        description: "",
+        pdfUrl: pdfUrlGoogleDrive,
+        coverImageUrl,
+        language: "",
+        tags: [],
+        // Otros campos necesarios
+      });
+
+      await newBook.save();
+      // Enviar respuesta al cliente
+      res.status(200).json(newBook);
+    } catch (error) {
+      console.error("Error creating book", error);
+      res.status(500).send("Error creating book");
+    }
   });
-
-  try {
-    await newBook.save();
-    res.status(200).send(newBook);
-  } catch (error) {
-    res.status(500).send(error);
-  }
 });
 
 app.post("/api/users", async (req, res) => {
@@ -209,8 +216,6 @@ const uploadBook = async (filePath, fileName, author) => {
     mimetype: "application/pdf",
     path: filePath,
   };
-
-  const drive = google.drive({ version: "v3", auth: oauth2Client });
 
   // Upload PDF file to Google Drive
   const pdfFileMetadata = {
