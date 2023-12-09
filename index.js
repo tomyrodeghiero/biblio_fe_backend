@@ -68,7 +68,7 @@ app.get("/google/redirect", async (req, res) => {
   res.send("Authenticated");
 });
 
-app.get("/api/books", async (req, res) => {
+app.get("/api/get-books", async (req, res) => {
   try {
     const books = await Book.find();
     const totalBooks = await Book.countDocuments();
@@ -79,6 +79,21 @@ app.get("/api/books", async (req, res) => {
     });
   } catch (error) {
     res.status(500).send(error);
+  }
+});
+
+// GET a specific book by id
+app.get("/api/book/:id", async (req, res) => {
+  try {
+    const book = await Book.findById(req.params.id);
+    if (!book) {
+      res.status(404).json({ message: "Book not found" });
+    } else {
+      res.json(book);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
