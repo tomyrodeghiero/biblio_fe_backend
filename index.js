@@ -251,9 +251,20 @@ app.post("/api/books", (req, res) => {
       return res.status(500).send("Error processing the form");
     }
 
-    // Extracción de campos y archivos
-    const { author, createdBy, description, language, tags } = fields;
     const title = Array.isArray(fields.title) ? fields.title[0] : fields.title;
+    const author = Array.isArray(fields.author)
+      ? fields.author[0]
+      : fields.author;
+    const createdBy = Array.isArray(fields.createdBy)
+      ? fields.createdBy[0]
+      : fields.createdBy;
+    const description = Array.isArray(fields.description)
+      ? fields.description[0]
+      : fields.description;
+    const language = Array.isArray(fields.language)
+      ? fields.language[0]
+      : fields.language;
+    const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags;
 
     const { pdfUrl, coverImage } = files;
 
@@ -274,12 +285,11 @@ app.post("/api/books", (req, res) => {
         title,
         author: author,
         createdBy: new ObjectId("657384bf6e9a75c2d37aa7c9"),
-        description: "",
+        description: description || "",
         pdfUrl: pdfUrlGoogleDrive,
         coverImageUrl,
-        language: "",
-        tags: [],
-        // Otros campos necesarios
+        language: language || "",
+        tags: tags || [],
       });
 
       await newBook.save();
