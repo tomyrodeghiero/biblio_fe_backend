@@ -15,6 +15,7 @@ mongoose.connect(process.env.DB_HOST);
 
 import Book from "./models/bookModel.js";
 import User from "./models/userModel.js";
+import Author from "./models/authorModel.js";
 
 const app = express();
 app.use(
@@ -66,6 +67,66 @@ app.get("/google/redirect", async (req, res) => {
   oauth2Client.setCredentials(tokens);
   fs.writeFileSync("credentials.json", JSON.stringify(tokens));
   res.send("Authenticated");
+});
+
+app.get("/api/get-authors", async (req, res) => {
+  try {
+    const authors = await Author.find().populate("books");
+    const totalAuthors = await Author.countDocuments();
+
+    res.status(200).json({
+      data: authors,
+      total: totalAuthors,
+    });
+  } catch (error) {
+    console.error("Error al obtener los autores", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.get("/api/author/:id", async (req, res) => {
+  try {
+    const authorId = req.params.id;
+    const author = await Author.findById(authorId).populate("books");
+
+    if (!author) {
+      res.status(404).json({ message: "Autor no encontrado" });
+    } else {
+      res.status(200).json(author);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+app.post("/api/create-author", async (req, res) => {
+  try {
+    const {
+      name,
+      biography,
+      profilePicture,
+      nationality,
+      dateOfBirth,
+      dateOfDeath,
+    } = req.body;
+
+    const newAuthor = new Author({
+      name,
+      biography,
+      profilePicture,
+      nationality,
+      dateOfBirth,
+      dateOfDeath,
+    });
+
+    await newAuthor.save();
+
+    res.status(201).json(newAuthor);
+  } catch (error) {
+    console.error("Error al crear un nuevo autor", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
 });
 
 app.get("/api/get-books", async (req, res) => {
@@ -194,11 +255,7 @@ app.post("/api/books", (req, res) => {
     const { author, createdBy, description, language, tags } = fields;
     const title = Array.isArray(fields.title) ? fields.title[0] : fields.title;
 
-    console.log("files", files);
     const { pdfUrl, coverImage } = files;
-
-    console.log("pdfUrl", pdfUrl);
-    console.log("coverImage", coverImage);
 
     try {
       // Validar si los archivos están presentes
@@ -391,6 +448,60 @@ app.delete("/api/delete-book/:id", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+const linkAuthorsToBooks = async () => {
+  const books = await Book.find();
+
+  for (const book of books) {
+    if (book.author && typeof book.author === "string") {
+      let author = await Author.findOne({ name: book.author });
+
+      if (!author) {
+        author = new Author({ name: book.author });
+        await author.save();
+      }
+
+      book.author = author._id;
+      await book.save();
+    }
+  }
+
+  console.log("Proceso completado");
+};
+
+app.get("/api/link-authors", (req, res) => {
+  linkAuthorsToBooks();
+  res.send("Enlazando autores...");
+});
+
+const assignBooksToAuthors = async () => {
+  try {
+    const books = await Book.find();
+
+    const booksByAuthor = books.reduce((acc, book) => {
+      if (book.author) {
+        if (!acc[book.author]) {
+          acc[book.author] = [];
+        }
+        acc[book.author].push(book._id);
+      }
+      return acc;
+    }, {});
+
+    for (const [authorId, bookIds] of Object.entries(booksByAuthor)) {
+      await Author.findByIdAndUpdate(authorId, { $set: { books: bookIds } });
+    }
+
+    console.log("Autores actualizados con sus libros");
+  } catch (error) {
+    console.error("Error al asignar libros a autores:", error);
+  }
+};
+
+app.get("/api/assign-books-to-authors", (req, res) => {
+  assignBooksToAuthors();
+  res.send("Asignando libros a autores...");
 });
 
 const PORT = 5001;

@@ -6,8 +6,10 @@ const authorSchema = new mongoose.Schema({
   profilePicture: String,
   nationality: String,
   dateOfBirth: Date,
+  dateOfDeath: Date,
+  books: [{ type: mongoose.Schema.Types.ObjectId, ref: "Book" }],
 });
 
 const Author = mongoose.model("Author", authorSchema);
 
-module.exports = Author;
+export default Author;
