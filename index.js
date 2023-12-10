@@ -329,7 +329,7 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-app.get("/api/users", async (req, res) => {
+app.get("/api/get-users", async (req, res) => {
   try {
     const users = await User.find();
     res.status(200).send(users);
