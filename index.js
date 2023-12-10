@@ -97,11 +97,67 @@ app.get("/api/book/:id", async (req, res) => {
   }
 });
 
+// Actualizar un libro específico por su ID
+app.patch("/api/edit-book/:id", (req, res) => {
+  const form = formidable();
+
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("Error parsing the form", err);
+      return res.status(500).send("Error processing the form");
+    }
+
+    // Extracción de campos y archivos
+    const title = Array.isArray(fields.title) ? fields.title[0] : fields.title;
+    const description = Array.isArray(fields.description)
+      ? fields.description[0]
+      : fields.description;
+    const language = Array.isArray(fields.language)
+      ? fields.language[0]
+      : fields.language;
+    const author = Array.isArray(fields.author)
+      ? fields.author[0]
+      : fields.author;
+    const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags;
+
+    const { coverImage } = files;
+
+    try {
+      // Subir la imagen de portada a Google Drive y obtener la URL
+      let coverImageUrl;
+      if (coverImage) {
+        coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
+      }
+
+      // Encuentra y actualiza el libro
+      const bookId = req.params.id;
+      const updates = {
+        title,
+        author,
+        description,
+        language,
+        tags,
+        ...(coverImageUrl && { coverImageUrl }), // Añadir coverImageUrl solo si existe
+      };
+
+      const updatedBook = await Book.findByIdAndUpdate(bookId, updates, {
+        new: true,
+      });
+
+      if (!updatedBook) {
+        return res.status(404).json({ message: "Book not found" });
+      }
+
+      res.json(updatedBook);
+    } catch (error) {
+      console.error("Error updating book", error);
+      res.status(500).json({ message: "Error updating book" });
+    }
+  });
+});
+
 // Función para subir archivo a Google Drive
 const uploadToGoogleDrive = async (file) => {
-  console.log("file -------->", file);
-  console.log("filepath -------->", file[0].filepath);
-  console.log("mimeType -------->", file[0].mimetype);
   if (!file[0] || !file[0].filepath || !file[0].mimetype) {
     throw new Error("Archivo no válido o ruta de archivo faltante");
   }
@@ -316,6 +372,25 @@ const deleteAllBooks = async () => {
 app.get("/api/delete-books", (req, res) => {
   deleteAllBooks();
   res.send("Borrando libros...");
+});
+
+// Delete book by ID
+app.delete("/api/delete-book/:id", async (req, res) => {
+  try {
+    console.log("req.params", req.params.id);
+    const result = await Book.findOneAndDelete({ _id: req.params.id });
+    console.log("result", result);
+    if (!result) {
+      // Manejar el caso en que no se encuentre el libro
+      res.status(404).send("Libro no encontrado");
+    } else {
+      // Libro eliminado con éxito
+      res.status(200).send("Libro eliminado");
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 const PORT = 5001;
