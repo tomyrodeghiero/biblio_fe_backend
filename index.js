@@ -26,7 +26,13 @@ app.use(
 );
 app.use(express.json());
 app.use(bodyParser.json({ limit: "50mb" }));
-app.use(bodyParser.urlencoded({ limit: "50mb", extended: true }));
+app.use(
+  bodyParser.urlencoded({
+    limit: "50mb",
+    extended: true,
+    parameterLimit: 50000,
+  })
+);
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.CLIENT_ID,
@@ -160,9 +166,7 @@ app.get("/api/book/:id", async (req, res) => {
 
 // Actualizar un libro específico por su ID
 app.patch("/api/edit-book/:id", (req, res) => {
-  const form = formidable({
-    maxFileSize: 50 * 1024 * 1024,
-  });
+  const form = formidable();
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
