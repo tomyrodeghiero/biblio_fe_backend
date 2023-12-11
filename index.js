@@ -135,6 +135,52 @@ app.post("/api/create-author", async (req, res) => {
   }
 });
 
+app.patch("/api/update-author/:id", (req, res) => {
+  const form = formidable();
+
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("Error parsing the form", err);
+      return res.status(500).send("Error processing the form");
+    }
+
+    try {
+      const authorId = req.params.id;
+      const author = await Author.findById(authorId);
+      if (!author) {
+        return res.status(404).json({ message: "Autor no encontrado" });
+      }
+
+      // Asegúrate de obtener el primer elemento de cada campo si es un array
+      const updateFields = {};
+      for (const key in fields) {
+        updateFields[key] = Array.isArray(fields[key])
+          ? fields[key][0]
+          : fields[key];
+      }
+
+      // Actualiza los campos del autor
+      Object.assign(author, updateFields);
+
+      // Subir la imagen de perfil a Google Drive y obtener la URL, si se proporcionó una
+      if (files.profilePicture) {
+        const profilePictureUrl = await uploadToGoogleDrive(
+          files.profilePicture,
+          "image/jpeg"
+        );
+        author.profilePicture = profilePictureUrl;
+      }
+
+      await author.save();
+      console.log("Autor actualizado con éxito");
+      res.status(200).json(author);
+    } catch (error) {
+      console.error("Error al actualizar el autor", error);
+      res.status(500).json({ message: "Error interno del servidor" });
+    }
+  });
+});
+
 app.get("/api/get-books", async (req, res) => {
   try {
     const books = await Book.find();
