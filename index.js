@@ -232,6 +232,9 @@ app.patch("/api/edit-book/:id", (req, res) => {
       ? fields.author[0]
       : fields.author;
     const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags;
+    const review = Array.isArray(fields.review)
+      ? fields.review[0]
+      : fields.review;
 
     const { coverImage } = files;
 
@@ -242,6 +245,7 @@ app.patch("/api/edit-book/:id", (req, res) => {
         coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
       }
 
+      console.log("review", review);
       // Encuentra y actualiza el libro
       const bookId = req.params.id;
       const updates = {
@@ -250,6 +254,7 @@ app.patch("/api/edit-book/:id", (req, res) => {
         description,
         language,
         tags,
+        review,
         ...(coverImageUrl && { coverImageUrl }), // Añadir coverImageUrl solo si existe
       };
 
@@ -318,6 +323,9 @@ app.post("/api/books", (req, res) => {
       ? fields.language[0]
       : fields.language;
     const tags = Array.isArray(fields.tags) ? fields.tags[0] : fields.tags;
+    const review = Array.isArray(fields.review)
+      ? fields.review[0]
+      : fields.review;
 
     const { pdfUrl, coverImage } = files;
 
@@ -343,6 +351,7 @@ app.post("/api/books", (req, res) => {
         coverImageUrl,
         language: language || "",
         tags: tags || [],
+        review: review || "",
       });
 
       await newBook.save();

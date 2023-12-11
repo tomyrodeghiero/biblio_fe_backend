@@ -14,6 +14,7 @@ const bookSchema = new mongoose.Schema({
   createdAt: Date,
   updatedAt: Date,
   rating: Number,
+  review: String,
 });
 
 const Book = mongoose.model("Book", bookSchema);
