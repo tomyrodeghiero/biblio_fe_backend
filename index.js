@@ -195,6 +195,34 @@ app.get("/api/get-books", async (req, res) => {
   }
 });
 
+app.get("/api/get-books/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const books = await Book.find();
+    const favoriteBookIds = new Set(
+      user.favoriteBooks.map((book) => book.toString())
+    );
+
+    const booksWithLikeStatus = books.map((book) => ({
+      ...book.toObject(),
+      isFavorite: favoriteBookIds.has(book._id.toString()),
+    }));
+
+    res.status(200).json({
+      data: booksWithLikeStatus,
+      total: booksWithLikeStatus.length,
+    });
+  } catch (error) {
+    console.error("Error al obtener libros:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
 // GET a specific book by id
 app.get("/api/book/:id", async (req, res) => {
   try {
@@ -574,6 +602,100 @@ const assignBooksToAuthors = async () => {
 app.get("/api/assign-books-to-authors", (req, res) => {
   assignBooksToAuthors();
   res.send("Asignando libros a autores...");
+});
+
+// Endpoint para obtener autores con nombres duplicados
+app.get("/api/get-duplicate-authors", async (req, res) => {
+  try {
+    const duplicateAuthors = await Author.aggregate([
+      {
+        $group: {
+          _id: { name: "$name" }, // Agrupa por el campo 'name'
+          count: { $sum: 1 }, // Cuenta cuántos documentos tienen este 'name'
+        },
+      },
+      {
+        $match: {
+          count: { $gt: 1 }, // Selecciona solo los grupos con más de un documento
+        },
+      },
+    ]);
+
+    if (duplicateAuthors.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "No se encontraron autores duplicados" });
+    }
+
+    res.json(duplicateAuthors);
+  } catch (error) {
+    console.error("Error al buscar autores duplicados", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.delete("/api/delete-author/:id", async (req, res) => {
+  const authorId = req.params.id;
+
+  try {
+    const result = await Author.findByIdAndDelete(authorId);
+
+    if (!result) {
+      return res.status(404).json({ message: "Autor no encontrado" });
+    }
+
+    res.status(200).json({ message: "Autor eliminado con éxito" });
+  } catch (error) {
+    console.error("Error al eliminar el autor", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// User endpoint
+app.patch("/api/favorite-books-for-user", async (req, res) => {
+  try {
+    const { email, bookId } = req.body; // Obtiene los parámetros del cuerpo de la solicitud
+
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Verifica si el libro ya está en la lista de favoritos
+    const index = user.favoriteBooks.indexOf(bookId);
+    if (index === -1) {
+      // Si no está, lo agrega
+      user.favoriteBooks.push(bookId);
+    } else {
+      // Si ya está, lo quita (toggle)
+      user.favoriteBooks.splice(index, 1);
+    }
+
+    console.log("user.favoriteBooks", user.favoriteBooks);
+
+    await user.save();
+    console.log("Estado de favorito actualizado");
+    res.status(200).json({ message: "Estado de favorito actualizado" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+app.get("/api/user-favorite-books/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).populate("likedBooks").exec();
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.status(200).json(user.likedBooks);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
 });
 
 const PORT = 5001;

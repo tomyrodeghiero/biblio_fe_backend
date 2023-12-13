@@ -7,6 +7,12 @@ const userSchema = new mongoose.Schema({
     name: String,
     profilePicture: String,
   },
+  favoriteBooks: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Book",
+    },
+  ],
   createdAt: Date,
   updatedAt: Date,
 });
