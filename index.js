@@ -698,6 +698,21 @@ app.get("/api/user-favorite-books/:userId", async (req, res) => {
   }
 });
 
+app.get("/api/get-authors-name", async (req, res) => {
+  try {
+    const authors = await Author.find().select("name"); // Modificado para seleccionar solamente el campo 'name'
+    const totalAuthors = await Author.countDocuments();
+
+    res.status(200).json({
+      data: authors.map((author) => author.name),
+      total: totalAuthors,
+    });
+  } catch (error) {
+    console.error("Error al obtener los autores", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
 const PORT = 5001;
 app.listen(PORT, () => {
   console.log("Server is running on port 5001");
