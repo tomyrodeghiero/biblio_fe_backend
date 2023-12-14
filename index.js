@@ -682,16 +682,23 @@ app.patch("/api/favorite-books-for-user", async (req, res) => {
   }
 });
 
-app.get("/api/user-favorite-books/:userId", async (req, res) => {
+app.get("/api/get-user-favorite-books/:email", async (req, res) => {
   try {
-    const { userId } = req.params;
-    const user = await User.findById(userId).populate("likedBooks").exec();
+    const { email } = req.params;
+    const user = await User.findOne({ email: email })
+      .populate("favoriteBooks")
+      .exec();
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    res.status(200).json(user.likedBooks);
+    const response = {
+      data: user.favoriteBooks,
+      total: user.favoriteBooks.length,
+    };
+
+    res.status(200).json(response);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Error interno del servidor" });
