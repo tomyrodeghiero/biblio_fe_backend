@@ -16,6 +16,8 @@ mongoose.connect(process.env.DB_HOST);
 import Book from "./models/bookModel.js";
 import User from "./models/userModel.js";
 import Author from "./models/authorModel.js";
+import FriendRequest from "./models/friendRequestModel.js";
+import Notification from "./models/notificationModel.js";
 
 const app = express();
 app.use(
@@ -419,12 +421,196 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
+app.patch("/api/update-user-privacy", async (req, res) => {
+  try {
+    const { email, isPrivate } = req.body;
+    const user = await User.findOneAndUpdate(
+      { email: email },
+      { isPrivate },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+    console.log("isprivate", isPrivate);
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 app.get("/api/get-users", async (req, res) => {
   try {
     const users = await User.find();
     res.status(200).send(users);
   } catch (error) {
     res.status(500).send(error);
+  }
+});
+
+app.get("/api/get-user/:email", async (req, res) => {
+  console.log("email", req.params.email);
+  const { email } = req.params;
+
+  try {
+    const user = await User.findOne({ email: email });
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+    console.log("user", user);
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+app.post("/api/send-friend-request", async (req, res) => {
+  const { requesterEmail, recipientEmail } = req.body;
+
+  try {
+    const requester = await User.findOne({ email: requesterEmail });
+    const recipient = await User.findOne({ email: recipientEmail });
+
+    if (!requester || !recipient) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const newRequest = new FriendRequest({
+      requester: requester._id,
+      recipient: recipient._id,
+    });
+    await newRequest.save();
+
+    const newNotification = new Notification({
+      recipient: recipient._id,
+      requester: requester._id,
+      message: `Tienes una nueva solicitud de amistad de ${requester.username}`,
+    });
+    await newNotification.save();
+
+    res.status(200).json({ message: "Friend request sent" });
+  } catch (error) {
+    res.status(500).json({ message: "Error sending friend request" });
+  }
+});
+
+// Eliminar todas las notificaciones
+app.delete("/api/delete-all-notifications", async (req, res) => {
+  try {
+    await Notification.deleteMany({}); // Esto borrará todas las notificaciones
+
+    res.status(200).json({ message: "All notifications deleted" });
+  } catch (error) {
+    console.error("Error deleting notifications", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Listar solicitudes
+app.get("/api/friend-requests/:email", async (req, res) => {
+  const user = await User.findOne({ email: req.params.email });
+  const requests = await FriendRequest.find({
+    recipient: user._id,
+    status: "pending",
+  }).populate("requester");
+  res.status(200).json(requests);
+});
+
+// Responder a solicitudes
+app.patch("/api/respond-friend-request", async (req, res) => {
+  const { recipientId, requesterId, status } = req.body; // 'accepted' o 'rejected'
+  console.log("userId", recipientId);
+  console.log("requesterId", requesterId);
+
+  try {
+    // Usa directamente los _id de los usuarios
+    const request = await FriendRequest.findOneAndUpdate(
+      { recipient: recipientId, requester: requesterId, status: "pending" },
+      { status },
+      { new: true }
+    );
+
+    if (!request) {
+      return res.status(404).json({ message: "Friend request not found" });
+    }
+
+    console.log("friend request");
+
+    res.status(200).json({ message: "Friend request updated" });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating friend request" });
+  }
+});
+
+app.patch("/api/respond-friend-request", async (req, res) => {
+  const { userEmail, requesterEmail, status } = req.body; // 'accepted' o 'rejected'
+
+  try {
+    const user = await User.findOne({ email: userEmail });
+    const requester = await User.findOne({ email: requesterEmail });
+
+    if (!user || !requester) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const request = await FriendRequest.findOneAndUpdate(
+      { recipient: user._id, requester: requester._id, status: "pending" },
+      { status },
+      { new: true }
+    );
+
+    if (!request) {
+      return res.status(404).json({ message: "Friend request not found" });
+    }
+
+    res.status(200).json({ message: "Friend request updated" });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating friend request" });
+  }
+});
+
+app.get("/api/get-notifications/:email", async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email });
+    if (!user) {
+      return res.status(404).send("User not found");
+    }
+
+    // Incluye información del solicitante en las notificaciones
+    const notifications = await Notification.find({ recipient: user._id })
+      .populate("requester", "username email")
+      .exec();
+
+    res.status(200).json(
+      notifications.map((notification) => {
+        return {
+          id: notification._id,
+          message: `Tienes una nueva solicitud de amistad de ${notification.requester.username}`,
+          read: notification.read,
+          createdAt: notification.createdAt,
+          requesterId: notification.requester._id,
+          recipientId: user._id,
+        };
+      })
+    );
+  } catch (error) {
+    res.status(500).json({ error: "Error al obtener las notificaciones" });
+  }
+});
+
+app.patch("/api/notifications/read/:notificationId", async (req, res) => {
+  try {
+    const notification = await Notification.findByIdAndUpdate(
+      req.params.notificationId,
+      { read: true },
+      { new: true }
+    );
+    if (!notification) {
+      return res.status(404).send("Notification not found");
+    }
+    res.status(200).json(notification);
+  } catch (error) {
+    res.status(500).send("Error updating notification");
   }
 });
 
