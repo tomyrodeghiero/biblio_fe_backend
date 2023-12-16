@@ -16,6 +16,12 @@ const userSchema = new mongoose.Schema({
   createdAt: Date,
   updatedAt: Date,
   isPrivate: { type: Boolean, default: false },
+  friends: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
 });
 
 const User = mongoose.model("User", userSchema);

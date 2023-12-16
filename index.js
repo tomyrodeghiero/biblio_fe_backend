@@ -496,6 +496,22 @@ app.post("/api/send-friend-request", async (req, res) => {
   }
 });
 
+app.get("/api/get-friends/:userId", async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const user = await User.findById(userId).populate("friends");
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.status(200).json(user.friends);
+  } catch (error) {
+    console.error("Error al obtener los amigos", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
 // Eliminar todas las notificaciones
 app.delete("/api/delete-all-notifications", async (req, res) => {
   try {
@@ -521,8 +537,6 @@ app.get("/api/friend-requests/:email", async (req, res) => {
 // Responder a solicitudes
 app.patch("/api/respond-friend-request", async (req, res) => {
   const { recipientId, requesterId, status } = req.body; // 'accepted' o 'rejected'
-  console.log("userId", recipientId);
-  console.log("requesterId", requesterId);
 
   try {
     // Usa directamente los _id de los usuarios
@@ -545,24 +559,26 @@ app.patch("/api/respond-friend-request", async (req, res) => {
 });
 
 app.patch("/api/respond-friend-request", async (req, res) => {
-  const { userEmail, requesterEmail, status } = req.body; // 'accepted' o 'rejected'
+  const { recipientId, requesterId, status } = req.body;
 
   try {
-    const user = await User.findOne({ email: userEmail });
-    const requester = await User.findOne({ email: requesterEmail });
-
-    if (!user || !requester) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
     const request = await FriendRequest.findOneAndUpdate(
-      { recipient: user._id, requester: requester._id, status: "pending" },
+      { recipient: recipientId, requester: requesterId, status: "pending" },
       { status },
       { new: true }
     );
 
     if (!request) {
       return res.status(404).json({ message: "Friend request not found" });
+    }
+
+    if (status === "accepted") {
+      await User.findByIdAndUpdate(recipientId, {
+        $addToSet: { friends: requesterId },
+      });
+      await User.findByIdAndUpdate(requesterId, {
+        $addToSet: { friends: recipientId },
+      });
     }
 
     res.status(200).json({ message: "Friend request updated" });
