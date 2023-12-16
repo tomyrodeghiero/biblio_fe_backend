@@ -466,6 +466,8 @@ app.get("/api/get-user/:email", async (req, res) => {
 
 app.post("/api/send-friend-request", async (req, res) => {
   const { requesterEmail, recipientEmail } = req.body;
+  console.log("requesterEmail", requesterEmail);
+  console.log("recipientEmail", recipientEmail);
 
   try {
     const requester = await User.findOne({ email: requesterEmail });
