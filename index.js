@@ -480,13 +480,13 @@ app.post("/api/send-friend-request", async (req, res) => {
     const newRequest = new FriendRequest({
       requester: requester._id,
       recipient: recipient._id,
+      status: "pending",
     });
     await newRequest.save();
 
     const newNotification = new Notification({
       recipient: recipient._id,
       requester: requester._id,
-      message: `Tienes una nueva solicitud de amistad de ${requester.username}`,
     });
     await newNotification.save();
 
@@ -496,10 +496,10 @@ app.post("/api/send-friend-request", async (req, res) => {
   }
 });
 
-app.get("/api/get-friends/:userId", async (req, res) => {
+app.get("/api/get-friends/:email", async (req, res) => {
   try {
-    const userId = req.params.userId;
-    const user = await User.findById(userId).populate("friends");
+    const email = req.params.email;
+    const user = await User.findOne({ email: email }).populate("friends");
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
@@ -534,37 +534,13 @@ app.get("/api/friend-requests/:email", async (req, res) => {
   res.status(200).json(requests);
 });
 
-// Responder a solicitudes
-app.patch("/api/respond-friend-request", async (req, res) => {
-  const { recipientId, requesterId, status } = req.body; // 'accepted' o 'rejected'
-
-  try {
-    // Usa directamente los _id de los usuarios
-    const request = await FriendRequest.findOneAndUpdate(
-      { recipient: recipientId, requester: requesterId, status: "pending" },
-      { status },
-      { new: true }
-    );
-
-    if (!request) {
-      return res.status(404).json({ message: "Friend request not found" });
-    }
-
-    console.log("friend request");
-
-    res.status(200).json({ message: "Friend request updated" });
-  } catch (error) {
-    res.status(500).json({ message: "Error updating friend request" });
-  }
-});
-
 app.patch("/api/respond-friend-request", async (req, res) => {
   const { recipientId, requesterId, status } = req.body;
 
   try {
     const request = await FriendRequest.findOneAndUpdate(
       { recipient: recipientId, requester: requesterId, status: "pending" },
-      { status },
+      { status: status },
       { new: true }
     );
 
@@ -603,11 +579,12 @@ app.get("/api/get-notifications/:email", async (req, res) => {
       notifications.map((notification) => {
         return {
           id: notification._id,
-          message: `Tienes una nueva solicitud de amistad de ${notification.requester.username}`,
           read: notification.read,
           createdAt: notification.createdAt,
           requesterId: notification.requester._id,
           recipientId: user._id,
+          status: notification.status,
+          requesterUsername: notification.requester.username,
         };
       })
     );
