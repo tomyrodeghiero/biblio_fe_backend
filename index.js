@@ -42,6 +42,22 @@ const oauth2Client = new google.auth.OAuth2(
   process.env.REDIRECT_URI
 );
 
+// Configurar credenciales iniciales
+oauth2Client.setCredentials({
+  refresh_token: process.env.REFRESH_TOKEN,
+});
+
+// Manejar actualizaciones de tokens
+oauth2Client.on("tokens", (tokens) => {
+  if (tokens.refresh_token) {
+    // Guardar el nuevo token de actualización
+    console.log(`Nuevo token de actualización: ${tokens.refresh_token}`);
+    // Aquí deberías actualizar el token de actualización en tu almacenamiento
+  }
+  console.log(`Nuevo token de acceso: ${tokens.access_token}`);
+  // Actualizar el token de acceso en tu almacenamiento
+});
+
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
 // Check if credentials are set
