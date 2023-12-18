@@ -216,20 +216,36 @@ app.get("/api/get-books", async (req, res) => {
 app.get("/api/get-books/:email", async (req, res) => {
   try {
     const email = req.params.email;
+    if (!email) {
+      return res.status(400).json({ message: "Email no proporcionado" });
+    }
+
     const user = await User.findOne({ email: email });
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    const books = await Book.find();
+    if (!Array.isArray(user.favoriteBooks)) {
+      return res
+        .status(500)
+        .json({ message: "Estructura de datos de usuario incorrecta" });
+    }
+
+    const books = await Book.find().populate("author", "name"); // Asumiendo que 'name' es el campo con el nombre del autor
+    if (!books) {
+      return res.status(500).json({ message: "Error al recuperar libros" });
+    }
+
     const favoriteBookIds = new Set(
       user.favoriteBooks.map((book) => book.toString())
     );
-
-    const booksWithLikeStatus = books.map((book) => ({
-      ...book.toObject(),
-      isFavorite: favoriteBookIds.has(book._id.toString()),
-    }));
+    const booksWithLikeStatus = books.map((book) => {
+      return {
+        ...book.toObject(),
+        author: book.author ? book.author.name : "Desconocido", // Incluye solo el nombre del autor
+        isFavorite: favoriteBookIds.has(book._id.toString()),
+      };
+    });
 
     res.status(200).json({
       data: booksWithLikeStatus,
