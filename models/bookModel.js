@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 
 const bookSchema = new mongoose.Schema({
   title: String,
-  author: String,
+  author: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Author",
+  },
   createBy: mongoose.Schema.Types.ObjectId,
   description: String,
   pdfUrl: String,

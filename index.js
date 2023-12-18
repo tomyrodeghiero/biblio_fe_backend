@@ -55,7 +55,7 @@ try {
   };
   oauth2Client.setCredentials(credentials);
 } catch (error) {
-  console.log("No credentials found", error);
+  console.error("No credentials found", error);
 }
 
 app.get("/auth/google", (req, res) => {
@@ -225,14 +225,49 @@ app.get("/api/get-books/:email", async (req, res) => {
   }
 });
 
-// GET a specific book by id
+const migrateAuthors = async () => {
+  const books = await Book.find({});
+
+  for (const book of books) {
+    // Verificar si el campo 'author' es un string
+    if (typeof book.author === "string") {
+      let author = await Author.findOne({ name: book.author });
+
+      // Si no existe un autor con ese nombre, créalo
+      if (!author) {
+        author = new Author({ name: book.author });
+        await author.save();
+      }
+
+      // Actualizar el libro con el ObjectId del autor
+      book.author = author._id;
+      await book.save();
+    }
+  }
+};
+
+app.get("/api/migrate-authors", (req, res) => {
+  migrateAuthors();
+  res.send("Migrando autores...");
+});
+
+// GET a specific book by id, including author's name
 app.get("/api/book/:id", async (req, res) => {
   try {
-    const book = await Book.findById(req.params.id);
+    // Cambiado para incluir información del autor
+    const book = await Book.findById(req.params.id).populate("author", "name");
+    console.log("book", book);
+
     if (!book) {
       res.status(404).json({ message: "Book not found" });
     } else {
-      res.json(book);
+      // Crear un objeto de respuesta con el nombre del autor en lugar del ID
+      const bookResponse = {
+        ...book.toObject(), // Convierte el documento de Mongoose a un objeto JS
+        author: book.author ? book.author.name : "Desconocido", // Incluye solo el nombre del autor
+      };
+
+      res.json(bookResponse);
     }
   } catch (error) {
     console.error(error);
@@ -851,8 +886,6 @@ app.patch("/api/favorite-books-for-user", async (req, res) => {
       // Si ya está, lo quita (toggle)
       user.favoriteBooks.splice(index, 1);
     }
-
-    console.log("user.favoriteBooks", user.favoriteBooks);
 
     await user.save();
     console.log("Estado de favorito actualizado");
