@@ -18,7 +18,6 @@ const userSchema = new mongoose.Schema({
     },
   },
   occupation: String,
-  company: String,
   education: String,
   preferredLanguage: String,
   preferredTheme: String,
