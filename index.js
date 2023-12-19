@@ -458,10 +458,12 @@ app.post("/api/books", (req, res) => {
 });
 
 app.post("/api/users", async (req, res) => {
-  const { username, email, profilePicture } = req.body;
+  const { username, email, profilePicture, dateOfBirth, nationality, bio } =
+    req.body;
 
   try {
     const existingUser = await User.findOne({ email: email });
+
     if (existingUser) {
       return res.status(200).send(existingUser);
     }
@@ -472,13 +474,51 @@ app.post("/api/users", async (req, res) => {
       profile: {
         name: username,
         profilePicture,
+        dateOfBirth,
+        nationality,
       },
       createdAt: new Date(),
       updatedAt: new Date(),
+      registrationCompleted: false,
     });
 
     await newUser.save();
     res.status(201).send(newUser);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
+app.patch("/api/update-user/:email", async (req, res) => {
+  const { email } = req.params;
+  const { username, profilePicture, dateOfBirth, gender, nationality, bio } =
+    req.body;
+
+  try {
+    const user = await User.findOne({ email: email });
+
+    if (!user) {
+      return res.status(404).send({ message: "User not found" });
+    }
+
+    // Actualiza los campos si están presentes en el cuerpo de la solicitud
+    if (username) user.profile.name = username;
+    if (profilePicture) user.profile.profilePicture = profilePicture;
+    if (dateOfBirth) user.profile.dateOfBirth = dateOfBirth;
+    if (nationality) user.profile.nationality = nationality;
+    if (bio) user.profile.bio = bio;
+    if (gender) user.profile.gender = gender;
+
+    // Verifica si la registración está completa
+    const isRegistrationComplete =
+      user.profile.dateOfBirth && user.profile.nationality;
+
+    user.registrationCompleted = isRegistrationComplete;
+
+    user.updatedAt = new Date(); // Actualiza la fecha de última modificación
+
+    await user.save();
+    res.status(200).send(user);
   } catch (error) {
     res.status(500).send(error);
   }
@@ -518,7 +558,15 @@ app.get("/api/get-user/:email", async (req, res) => {
     if (!user) {
       return res.status(404).send("User not found");
     }
-    res.status(200).json(user);
+
+    let isRegistrationComplete;
+    if (user.profile.nationality && user.profile.dateOfBirth) {
+      isRegistrationComplete = true;
+    } else {
+      isRegistrationComplete = false;
+    }
+
+    res.status(200).json({ ...user.toObject(), isRegistrationComplete });
   } catch (error) {
     res.status(500).send(error);
   }
@@ -587,7 +635,6 @@ app.get("/api/friend-requests/:email", async (req, res) => {
   const user = await User.findOne({ email: req.params.email });
   const requests = await FriendRequest.find({
     recipient: user._id,
-    status: "pending",
   }).populate("requester");
   res.status(200).json(requests);
 });
@@ -597,8 +644,8 @@ app.patch("/api/respond-friend-request", async (req, res) => {
 
   try {
     const request = await FriendRequest.findOneAndUpdate(
-      { recipient: recipientId, requester: requesterId, status: "pending" },
-      { status: status },
+      { recipient: recipientId, requester: requesterId },
+      { $set: { status: status } },
       { new: true }
     );
 
@@ -606,7 +653,15 @@ app.patch("/api/respond-friend-request", async (req, res) => {
       return res.status(404).json({ message: "Friend request not found" });
     }
 
+    const notificationUpdate = { read: true, status: status };
+    await Notification.findOneAndUpdate(
+      { recipient: recipientId, requester: requesterId },
+      { $set: notificationUpdate },
+      { new: true }
+    );
+
     if (status === "accepted") {
+      // Agregar a amigos si la solicitud es aceptada
       await User.findByIdAndUpdate(recipientId, {
         $addToSet: { friends: requesterId },
       });
@@ -617,6 +672,7 @@ app.patch("/api/respond-friend-request", async (req, res) => {
 
     res.status(200).json({ message: "Friend request updated" });
   } catch (error) {
+    console.error("Error updating friend request", error);
     res.status(500).json({ message: "Error updating friend request" });
   }
 });
@@ -939,6 +995,23 @@ app.get("/api/get-authors-name", async (req, res) => {
     });
   } catch (error) {
     console.error("Error al obtener los autores", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.delete("/api/delete-user/:email", async (req, res) => {
+  try {
+    const email = req.params.email;
+
+    const result = await User.findOneAndDelete({ email: email });
+
+    if (!result) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    res.status(200).json({ message: "Usuario eliminado con éxito" });
+  } catch (error) {
+    console.error("Error al eliminar el usuario", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });

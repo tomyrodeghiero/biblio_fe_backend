@@ -6,7 +6,22 @@ const userSchema = new mongoose.Schema({
   profile: {
     name: String,
     profilePicture: String,
+    gender: String,
+    phone: String,
+    dateOfBirth: Date,
+    nationality: String,
+    bio: String,
+    socialMedia: {
+      twitter: String,
+      facebook: String,
+      instagram: String,
+    },
   },
+  occupation: String,
+  company: String,
+  education: String,
+  preferredLanguage: String,
+  preferredTheme: String,
   favoriteBooks: [
     {
       type: mongoose.Schema.Types.ObjectId,
