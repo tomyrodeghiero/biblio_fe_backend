@@ -190,7 +190,6 @@ app.patch("/api/update-author/:id", (req, res) => {
       }
 
       await author.save();
-      console.log("Autor actualizado con éxito");
       res.status(200).json(author);
     } catch (error) {
       console.error("Error al actualizar el autor", error);
@@ -288,7 +287,6 @@ app.get("/api/book/:id", async (req, res) => {
   try {
     // Cambiado para incluir información del autor
     const book = await Book.findById(req.params.id).populate("author", "name");
-    console.log("book", book);
 
     if (!book) {
       res.status(404).json({ message: "Book not found" });
@@ -342,7 +340,6 @@ app.patch("/api/edit-book/:id", (req, res) => {
         coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
       }
 
-      console.log("review", review);
       // Encuentra y actualiza el libro
       const bookId = req.params.id;
       const updates = {
@@ -398,7 +395,6 @@ const uploadToGoogleDrive = async (file) => {
 
 app.post("/api/books", (req, res) => {
   const form = formidable();
-  console.log("books");
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -499,7 +495,6 @@ app.patch("/api/update-user-privacy", async (req, res) => {
     if (!user) {
       return res.status(404).send("User not found");
     }
-    console.log("isprivate", isPrivate);
     res.status(200).json(user);
   } catch (error) {
     res.status(500).send(error);
@@ -516,7 +511,6 @@ app.get("/api/get-users", async (req, res) => {
 });
 
 app.get("/api/get-user/:email", async (req, res) => {
-  console.log("email", req.params.email);
   const { email } = req.params;
 
   try {
@@ -524,7 +518,6 @@ app.get("/api/get-user/:email", async (req, res) => {
     if (!user) {
       return res.status(404).send("User not found");
     }
-    console.log("user", user);
     res.status(200).json(user);
   } catch (error) {
     res.status(500).send(error);
@@ -533,8 +526,6 @@ app.get("/api/get-user/:email", async (req, res) => {
 
 app.post("/api/send-friend-request", async (req, res) => {
   const { requesterEmail, recipientEmail } = req.body;
-  console.log("requesterEmail", requesterEmail);
-  console.log("recipientEmail", recipientEmail);
 
   try {
     const requester = await User.findOne({ email: requesterEmail });
@@ -681,9 +672,6 @@ const uploadPath = "./src/POR AUTORES";
 const uploadBook = async (filePath, fileName, author) => {
   const existingBook = await Book.findOne({ title: fileName, author: author });
   if (existingBook) {
-    console.log(
-      `El libro ${fileName} de ${author} ya existe, omitiendo la subida.`
-    );
     return;
   }
 
@@ -710,7 +698,6 @@ const uploadBook = async (filePath, fileName, author) => {
       media: pdfMedia,
     });
   } catch (error) {
-    console.log(`Error al subir el archivo PDF ${fileName}:`, error);
     return;
   }
 
@@ -732,16 +719,14 @@ const uploadBook = async (filePath, fileName, author) => {
 
   try {
     await newBook.save();
-    console.log(`Libro ${fileName} guardado con éxito`);
   } catch (error) {
-    console.log(`Error al guardar el libro ${fileName}:`, error);
+    console.error("Error al guardar el libro", error);
   }
 };
 
 const processDirectory = async (dirPath, authorName = "") => {
   fs.readdir(dirPath, async (err, files) => {
     if (err) {
-      console.log(err);
       return;
     }
 
@@ -766,7 +751,6 @@ app.get("/api/upload-books", (req, res) => {
 const deleteAllBooks = async () => {
   try {
     const result = await Book.deleteMany({});
-    console.log(`Se han borrado ${result.deletedCount} libros`);
     mongoose.disconnect();
   } catch (error) {
     console.error("Error al borrar libros:", error);
@@ -782,9 +766,7 @@ app.get("/api/delete-books", (req, res) => {
 // Delete book by ID
 app.delete("/api/delete-book/:id", async (req, res) => {
   try {
-    console.log("req.params", req.params.id);
     const result = await Book.findOneAndDelete({ _id: req.params.id });
-    console.log("result", result);
     if (!result) {
       // Manejar el caso en que no se encuentre el libro
       res.status(404).send("Libro no encontrado");
@@ -814,8 +796,6 @@ const linkAuthorsToBooks = async () => {
       await book.save();
     }
   }
-
-  console.log("Proceso completado");
 };
 
 app.get("/api/link-authors", (req, res) => {
@@ -840,8 +820,6 @@ const assignBooksToAuthors = async () => {
     for (const [authorId, bookIds] of Object.entries(booksByAuthor)) {
       await Author.findByIdAndUpdate(authorId, { $set: { books: bookIds } });
     }
-
-    console.log("Autores actualizados con sus libros");
   } catch (error) {
     console.error("Error al asignar libros a autores:", error);
   }
@@ -920,7 +898,6 @@ app.patch("/api/favorite-books-for-user", async (req, res) => {
     }
 
     await user.save();
-    console.log("Estado de favorito actualizado");
     res.status(200).json({ message: "Estado de favorito actualizado" });
   } catch (error) {
     console.error(error);
