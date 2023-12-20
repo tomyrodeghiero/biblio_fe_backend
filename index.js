@@ -18,6 +18,7 @@ import User from "./models/userModel.js";
 import Author from "./models/authorModel.js";
 import FriendRequest from "./models/friendRequestModel.js";
 import Notification from "./models/notificationModel.js";
+import Category from "./models/categoryModel.js";
 
 const app = express();
 app.use(
@@ -419,6 +420,9 @@ app.post("/api/books", (req, res) => {
     const review = Array.isArray(fields.review)
       ? fields.review[0]
       : fields.review;
+    const category = Array.isArray(fields.category)
+      ? fields.category[0]
+      : fields.category;
 
     const { pdfUrl, coverImage } = files;
 
@@ -445,10 +449,10 @@ app.post("/api/books", (req, res) => {
         language: language || "",
         tags: tags || [],
         review: review || "",
+        category: new ObjectId(category),
       });
 
       await newBook.save();
-      // Enviar respuesta al cliente
       res.status(200).json(newBook);
     } catch (error) {
       console.error("Error creating book", error);
@@ -1013,6 +1017,50 @@ app.delete("/api/delete-user/:email", async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar el usuario", error);
     res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.get("/api/get-categories", async (req, res) => {
+  try {
+    const categories = await Category.find({});
+    res.status(200).json(categories);
+  } catch (error) {
+    console.error("Error al obtener categorías:", error);
+    res.status(500).send("Error interno del servidor");
+  }
+});
+
+app.get("/api/get-statistics/:email", async (req, res) => {
+  const email = req.params.email;
+
+  if (!email) {
+    return res.status(400).send("Email es requerido");
+  }
+
+  try {
+    const user = await User.findOne({ email }).populate("favoriteBooks").lean();
+
+    if (!user) {
+      return res.status(404).send("Usuario no encontrado");
+    }
+
+    const categoryCount = await Category.countDocuments({});
+    const authorCount = await Author.countDocuments({});
+    const userCount = await User.countDocuments({});
+    const ChristianBooksCount = await Book.countDocuments({}); // Agregar await aquí
+
+    const response = {
+      categoryCount,
+      authorCount,
+      userCount,
+      favoriteBooksCount: user.favoriteBooks.length,
+      ChristianBooksCount,
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error al obtener estadísticas:", error);
+    res.status(500).send("Error interno del servidor");
   }
 });
 

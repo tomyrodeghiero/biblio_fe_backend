@@ -18,6 +18,10 @@ const bookSchema = new mongoose.Schema({
   updatedAt: Date,
   rating: Number,
   review: String,
+  category: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Category",
+  },
 });
 
 const Book = mongoose.model("Book", bookSchema);
