@@ -199,6 +199,35 @@ app.patch("/api/update-author/:id", (req, res) => {
   });
 });
 
+app.post("/api/update-author-books/:authorId", async (req, res) => {
+  const authorId = req.params.authorId;
+  const { bookId } = req.body;
+
+  try {
+    // Verificar si el autor y el libro existen
+    const authorExists = await Author.findById(authorId);
+    const bookExists = await Book.findById(bookId);
+
+    if (!authorExists || !bookExists) {
+      return res.status(404).json({ message: "Author or book not found" });
+    }
+
+    // Actualizar la lista de libros del autor
+    await Author.findByIdAndUpdate(
+      authorId,
+      { $addToSet: { books: bookId } }, // Usa $addToSet para evitar duplicados
+      { new: true } // Devuelve el documento modificado
+    );
+
+    res
+      .status(200)
+      .json({ message: "Author's book list updated successfully" });
+  } catch (error) {
+    console.error("Error updating author's book list", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 app.get("/api/get-books", async (req, res) => {
   try {
     const books = await Book.find();
@@ -210,6 +239,27 @@ app.get("/api/get-books", async (req, res) => {
     });
   } catch (error) {
     res.status(500).send(error);
+  }
+});
+
+app.get("/api/get-pending-books", async (req, res) => {
+  try {
+    const pendingBooks = await Book.find({ status: "pending" }).populate(
+      "author",
+      "name"
+    );
+
+    if (!pendingBooks.length) {
+      return res.status(404).json({ message: "No pending books found" });
+    }
+
+    res.status(200).json({
+      data: pendingBooks,
+      total: pendingBooks.length,
+    });
+  } catch (error) {
+    console.error("Error al obtener libros pendientes", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
@@ -231,7 +281,11 @@ app.get("/api/get-books/:email", async (req, res) => {
         .json({ message: "Estructura de datos de usuario incorrecta" });
     }
 
-    const books = await Book.find().populate("author", "name"); // Asumiendo que 'name' es el campo con el nombre del autor
+    // Cambio aquí: filtrar solo los libros aprobados
+    const books = await Book.find({ status: "approved" }).populate(
+      "author",
+      "name"
+    );
     if (!books) {
       return res.status(500).json({ message: "Error al recuperar libros" });
     }
@@ -242,7 +296,7 @@ app.get("/api/get-books/:email", async (req, res) => {
     const booksWithLikeStatus = books.map((book) => {
       return {
         ...book.toObject(),
-        author: book.author ? book.author.name : "Desconocido", // Incluye solo el nombre del autor
+        author: book.author ? book.author.name : "Desconocido",
         isFavorite: favoriteBookIds.has(book._id.toString()),
       };
     });
@@ -331,6 +385,9 @@ app.patch("/api/edit-book/:id", (req, res) => {
     const review = Array.isArray(fields.review)
       ? fields.review[0]
       : fields.review;
+    const status = Array.isArray(fields.status)
+      ? fields.status[0]
+      : fields.status;
 
     const { coverImage } = files;
 
@@ -350,6 +407,7 @@ app.patch("/api/edit-book/:id", (req, res) => {
         language,
         tags,
         review,
+        status,
         ...(coverImageUrl && { coverImageUrl }), // Añadir coverImageUrl solo si existe
       };
 
@@ -1046,16 +1104,22 @@ app.get("/api/get-user-favorite-books/:email", async (req, res) => {
   try {
     const { email } = req.params;
     const user = await User.findOne({ email: email })
-      .populate("favoriteBooks")
+      .populate({
+        path: "favoriteBooks",
+        match: { status: "approved" }, // Filtrar solo libros aprobados
+      })
       .exec();
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
+    // Filtrar los libros favoritos para excluir los que no han sido cargados debido al filtro de estado
+    const approvedFavoriteBooks = user.favoriteBooks.filter((book) => book);
+
     const response = {
-      data: user.favoriteBooks,
-      total: user.favoriteBooks.length,
+      data: approvedFavoriteBooks,
+      total: approvedFavoriteBooks.length,
     };
 
     res.status(200).json(response);
@@ -1138,6 +1202,22 @@ app.get("/api/get-statistics/:email", async (req, res) => {
   } catch (error) {
     console.error("Error al obtener estadísticas:", error);
     res.status(500).send("Error interno del servidor");
+  }
+});
+
+app.patch("/api/approve-all-books", async (req, res) => {
+  try {
+    // Actualizar el estado de todos los libros a 'approved'
+    const result = await Book.updateMany({}, { status: "approved" });
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({ message: "No books updated" });
+    }
+
+    res.status(200).json({ message: `${result.modifiedCount} books approved` });
+  } catch (error) {
+    console.error("Error approving books", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
