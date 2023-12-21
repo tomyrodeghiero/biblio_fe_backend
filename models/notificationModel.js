@@ -9,11 +9,6 @@ const notificationSchema = new mongoose.Schema({
   type: String,
   message: String,
   book: { type: mongoose.Schema.Types.ObjectId, ref: "Book" },
-  status: {
-    type: String,
-    enum: ["unread", "read"],
-    default: "unread",
-  },
 });
 
 const Notification = mongoose.model("Notification", notificationSchema);

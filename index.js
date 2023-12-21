@@ -615,6 +615,7 @@ app.post("/api/send-friend-request", async (req, res) => {
     const existingRequest = await FriendRequest.findOne({
       requester: requester._id,
       recipient: recipient._id,
+      requesterName: requester.profile.name,
       status: "pending",
     });
 
@@ -761,26 +762,29 @@ app.get("/api/get-notifications/:email", async (req, res) => {
       return res.status(404).send("User not found");
     }
 
-    // Incluye información del solicitante en las notificaciones
     const notifications = await Notification.find({ recipient: user._id })
-      .populate("requester", "username email")
+      .populate("requester", "email profile.name")
       .exec();
 
-    res.status(200).json(
-      notifications.map((notification) => {
-        return {
-          id: notification._id,
-          read: notification.read,
-          createdAt: notification.createdAt,
-          requesterId: notification.requester._id,
-          recipientId: user._id,
-          status: notification.status,
-          requesterUsername: notification.requester.username,
-        };
-      })
-    );
+    const transformedNotifications = notifications.map((notification) => {
+      const { _id, read, createdAt, status, requester } = notification;
+
+      return {
+        id: _id,
+        read,
+        createdAt,
+        requesterId: requester ? requester._id : null,
+        recipientId: user._id,
+        status,
+        requesterEmail: requester ? requester.email : null,
+        requesterName: requester ? requester.profile.name : null, // Añadiendo el nombre del solicitante
+      };
+    });
+
+    res.status(200).json(transformedNotifications);
   } catch (error) {
-    res.status(500).json({ error: "Error al obtener las notificaciones" });
+    console.error("Error al obtener las notificaciones:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
