@@ -6,7 +6,7 @@ const bookSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Author",
   },
-  createBy: mongoose.Schema.Types.ObjectId,
+  createdBy: String,
   description: String,
   pdfUrl: String,
   coverImageUrl: String,

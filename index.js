@@ -392,14 +392,19 @@ app.patch("/api/edit-book/:id", (req, res) => {
     const { coverImage } = files;
 
     try {
-      // Subir la imagen de portada a Google Drive y obtener la URL
+      const bookId = req.params.id;
+
+      // Encuentra el libro antes de actualizarlo
+      const originalBook = await Book.findById(bookId);
+      if (!originalBook) {
+        return res.status(404).json({ message: "Book not found" });
+      }
+
       let coverImageUrl;
       if (coverImage) {
         coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
       }
 
-      // Encuentra y actualiza el libro
-      const bookId = req.params.id;
       const updates = {
         title,
         author,
@@ -408,15 +413,34 @@ app.patch("/api/edit-book/:id", (req, res) => {
         tags,
         review,
         status,
-        ...(coverImageUrl && { coverImageUrl }), // Añadir coverImageUrl solo si existe
+        ...(coverImageUrl && { coverImageUrl }),
       };
 
       const updatedBook = await Book.findByIdAndUpdate(bookId, updates, {
         new: true,
       });
 
-      if (!updatedBook) {
-        return res.status(404).json({ message: "Book not found" });
+      // Verifica si el estado cambió a 'approved'
+      if (
+        originalBook.status === "pending" &&
+        updatedBook.status === "approved"
+      ) {
+        // Encontrar el usuario correspondiente a createdBy
+        const user = await User.findOne({ email: originalBook.createdBy });
+
+        if (user) {
+          // Crear y guardar una notificación
+          const newNotification = new Notification({
+            recipient: user._id,
+            message: `Your book "${updatedBook.title}" has been approved.`,
+            bookApproved: true,
+            type: "bookApproval",
+            bookNameApproved: updatedBook.title,
+            book: updatedBook._id,
+            status: "pending",
+          });
+          await newNotification.save();
+        }
       }
 
       res.json(updatedBook);
@@ -465,9 +489,6 @@ app.post("/api/books", (req, res) => {
     const author = Array.isArray(fields.author)
       ? fields.author[0]
       : fields.author;
-    const createdBy = Array.isArray(fields.createdBy)
-      ? fields.createdBy[0]
-      : fields.createdBy;
     const description = Array.isArray(fields.description)
       ? fields.description[0]
       : fields.description;
@@ -481,6 +502,9 @@ app.post("/api/books", (req, res) => {
     const category = Array.isArray(fields.category)
       ? fields.category[0]
       : fields.category;
+    const createdBy = Array.isArray(fields.createdBy)
+      ? fields.createdBy[0]
+      : fields.createdBy;
 
     const { pdfUrl, coverImage } = files;
 
@@ -500,7 +524,7 @@ app.post("/api/books", (req, res) => {
       const newBook = new Book({
         title,
         author: author,
-        createdBy: new ObjectId("657384bf6e9a75c2d37aa7c9"),
+        createdBy: createdBy,
         description: description || "",
         pdfUrl: pdfUrlGoogleDrive,
         coverImageUrl,
@@ -622,6 +646,18 @@ app.get("/api/get-users", async (req, res) => {
   }
 });
 
+app.get("/api/get-users/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    const users = await User.find({ email: { $ne: email } });
+
+    res.status(200).send(users);
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 app.get("/api/get-user/:email", async (req, res) => {
   const { email } = req.params;
 
@@ -645,18 +681,11 @@ app.get("/api/get-user/:email", async (req, res) => {
 });
 
 app.post("/api/send-friend-request", async (req, res) => {
-  console.log("pass");
   const { requesterEmail, recipientEmail } = req.body;
-
-  console.log("requesterEmail", requesterEmail);
-  console.log("recipientEmail", recipientEmail);
 
   try {
     const requester = await User.findOne({ email: requesterEmail });
     const recipient = await User.findOne({ email: recipientEmail });
-
-    // console.log("requester", requester);
-    console.log("recipient", recipient);
 
     if (!requester || !recipient) {
       return res.status(404).json({ message: "User not found" });
@@ -697,7 +726,6 @@ app.post("/api/send-friend-request", async (req, res) => {
     });
     await newNotification.save();
 
-    console.log("send");
     res.status(200).json({ message: "Friend request sent" });
   } catch (error) {
     console.error("Error sending friend request", error);
@@ -737,10 +765,8 @@ app.post("/api/check-friend-request-status", async (req, res) => {
 });
 
 app.get("/api/get-friends/:email", async (req, res) => {
-  console.log("pass FRIENDS");
   try {
     const email = req.params.email;
-    console.log("email", email);
     const user = await User.findOne({ email: email }).populate("friends");
 
     if (!user) {
@@ -825,7 +851,15 @@ app.get("/api/get-notifications/:email", async (req, res) => {
       .exec();
 
     const transformedNotifications = notifications.map((notification) => {
-      const { _id, read, createdAt, status, requester } = notification;
+      const {
+        _id,
+        read,
+        createdAt,
+        status,
+        requester,
+        bookApproved,
+        bookNameApproved,
+      } = notification;
 
       return {
         id: _id,
@@ -835,7 +869,9 @@ app.get("/api/get-notifications/:email", async (req, res) => {
         recipientId: user._id,
         status,
         requesterEmail: requester ? requester.email : null,
-        requesterName: requester ? requester.profile.name : null, // Añadiendo el nombre del solicitante
+        requesterName: requester ? requester.profile.name : null,
+        bookApproved: bookApproved ? bookApproved : null,
+        bookNameApproved: bookNameApproved ? bookNameApproved : null,
       };
     });
 

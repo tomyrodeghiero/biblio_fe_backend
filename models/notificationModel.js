@@ -9,6 +9,9 @@ const notificationSchema = new mongoose.Schema({
   type: String,
   message: String,
   book: { type: mongoose.Schema.Types.ObjectId, ref: "Book" },
+  message: String,
+  bookApproved: { type: Boolean, default: false },
+  bookNameApproved: String,
 });
 
 const Notification = mongoose.model("Notification", notificationSchema);
