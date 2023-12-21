@@ -270,40 +270,32 @@ app.get("/api/get-books/:email", async (req, res) => {
       return res.status(400).json({ message: "Email no proporcionado" });
     }
 
-    const user = await User.findOne({ email: email });
+    // Obtener el usuario y su lista de libros favoritos
+    const user = await User.findOne({ email: email }).populate("favoriteBooks");
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
-    if (!Array.isArray(user.favoriteBooks)) {
-      return res
-        .status(500)
-        .json({ message: "Estructura de datos de usuario incorrecta" });
-    }
-
-    // Cambio aquí: filtrar solo los libros aprobados
-    const books = await Book.find({ status: "approved" }).populate(
-      "author",
-      "name"
-    );
-    if (!books) {
-      return res.status(500).json({ message: "Error al recuperar libros" });
-    }
-
+    // Crear un conjunto de IDs de libros favoritos para comprobación rápida
     const favoriteBookIds = new Set(
-      user.favoriteBooks.map((book) => book.toString())
+      user.favoriteBooks.map((book) => book._id.toString())
     );
-    const booksWithLikeStatus = books.map((book) => {
+
+    // Obtener todos los libros de la base de datos
+    const books = await Book.find({}).populate("author", "name");
+
+    // Agregar la propiedad isFavorite a cada libro
+    const booksWithFavoriteStatus = books.map((book) => {
       return {
         ...book.toObject(),
-        author: book.author ? book.author.name : "Desconocido",
         isFavorite: favoriteBookIds.has(book._id.toString()),
+        author: book.author ? book.author.name : "Desconocido",
       };
     });
 
     res.status(200).json({
-      data: booksWithLikeStatus,
-      total: booksWithLikeStatus.length,
+      data: booksWithFavoriteStatus,
+      total: booksWithFavoriteStatus.length,
     });
   } catch (error) {
     console.error("Error al obtener libros:", error);
@@ -1112,6 +1104,8 @@ app.delete("/api/delete-author/:id", async (req, res) => {
 app.patch("/api/favorite-books-for-user", async (req, res) => {
   try {
     const { email, bookId } = req.body; // Obtiene los parámetros del cuerpo de la solicitud
+    console.log("email", email);
+    console.log("bookId", bookId);
 
     const user = await User.findOne({ email: email });
     if (!user) {
