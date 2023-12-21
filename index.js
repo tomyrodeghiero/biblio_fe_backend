@@ -450,7 +450,17 @@ app.post("/api/books", (req, res) => {
         tags: tags || [],
         review: review || "",
         category: new ObjectId(category),
+        rating: 5.0,
       });
+
+      // Crear una notificación
+      const newNotification = new Notification({
+        type: "newBook",
+        message: `Nuevo libro pendiente de aprobación: ${fields.title}`,
+        book: newBook._id,
+      });
+
+      await newNotification.save();
 
       await newBook.save();
       res.status(200).json(newBook);
@@ -577,16 +587,44 @@ app.get("/api/get-user/:email", async (req, res) => {
 });
 
 app.post("/api/send-friend-request", async (req, res) => {
+  console.log("pass");
   const { requesterEmail, recipientEmail } = req.body;
+
+  console.log("requesterEmail", requesterEmail);
+  console.log("recipientEmail", recipientEmail);
 
   try {
     const requester = await User.findOne({ email: requesterEmail });
     const recipient = await User.findOne({ email: recipientEmail });
 
+    // console.log("requester", requester);
+    console.log("recipient", recipient);
+
     if (!requester || !recipient) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Comprobar si ya son amigos
+    const areAlreadyFriends = requester.friends.includes(recipient._id);
+    if (areAlreadyFriends) {
+      console.log("Users are already friends");
+      return res.status(400).json({ message: "Users are already friends" });
+    }
+
+    // Comprobar si ya existe una solicitud pendiente
+    const existingRequest = await FriendRequest.findOne({
+      requester: requester._id,
+      recipient: recipient._id,
+      status: "pending",
+    });
+
+    if (existingRequest) {
+      return res
+        .status(400)
+        .json({ message: "Friend request already pending" });
+    }
+
+    // Crear la solicitud de amistad
     const newRequest = new FriendRequest({
       requester: requester._id,
       recipient: recipient._id,
@@ -600,15 +638,50 @@ app.post("/api/send-friend-request", async (req, res) => {
     });
     await newNotification.save();
 
+    console.log("send");
     res.status(200).json({ message: "Friend request sent" });
   } catch (error) {
+    console.error("Error sending friend request", error);
     res.status(500).json({ message: "Error sending friend request" });
   }
 });
 
+// Endpoint para verificar el estado de una solicitud de amistad
+app.post("/api/check-friend-request-status", async (req, res) => {
+  const { requesterEmail, recipientEmail } = req.body;
+
+  try {
+    const requester = await User.findOne({ email: requesterEmail });
+    const recipient = await User.findOne({ email: recipientEmail });
+
+    if (!requester || !recipient) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Comprobar si ya existe una solicitud pendiente
+    const existingRequest = await FriendRequest.findOne({
+      requester: requester._id,
+      recipient: recipient._id,
+    });
+
+    // Si existe una solicitud, envía el estado de la misma
+    if (existingRequest) {
+      return res.status(200).json({ status: existingRequest.status });
+    }
+
+    // Si no hay solicitud, envía un estado de 'none'
+    res.status(200).json({ status: "none" });
+  } catch (error) {
+    console.error("Error checking friend request status", error);
+    res.status(500).json({ message: "Error checking friend request status" });
+  }
+});
+
 app.get("/api/get-friends/:email", async (req, res) => {
+  console.log("pass FRIENDS");
   try {
     const email = req.params.email;
+    console.log("email", email);
     const user = await User.findOne({ email: email }).populate("friends");
 
     if (!user) {
