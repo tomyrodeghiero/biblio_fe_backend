@@ -297,29 +297,31 @@ app.get("/api/get-books/:email", async (req, res) => {
   try {
     const email = req.params.email;
     if (!email) {
-      return res.status(400).json({ message: "Email no proporcionado" });
+      return res.status(400).json({ message: "Email not provided" });
     }
 
-    // Obtener el usuario y su lista de libros favoritos
+    // Find the user by email and populate their favoriteBooks
     const user = await User.findOne({ email: email }).populate("favoriteBooks");
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      return res.status(404).json({ message: "User not found" });
     }
 
-    // Crear un conjunto de IDs de libros favoritos para comprobación rápida
+    // Create a set of favorite book IDs for quick checking
     const favoriteBookIds = new Set(
       user.favoriteBooks.map((book) => book._id.toString())
     );
 
-    // Obtener todos los libros de la base de datos
+    console.log("Favorite book IDs:", favoriteBookIds);
+
+    // Find all books in the database and populate their author field
     const books = await Book.find({}).populate("author", "name");
 
-    // Agregar la propiedad isFavorite a cada libro
+    // Create an array of books with the isFavorite property
     const booksWithFavoriteStatus = books.map((book) => {
       return {
         ...book.toObject(),
         isFavorite: favoriteBookIds.has(book._id.toString()),
-        author: book.author ? book.author.name : "Desconocido",
+        author: book.author ? book.author.name : "Unknown",
       };
     });
 
@@ -328,8 +330,8 @@ app.get("/api/get-books/:email", async (req, res) => {
       total: booksWithFavoriteStatus.length,
     });
   } catch (error) {
-    console.error("Error al obtener libros:", error);
-    res.status(500).json({ message: "Error interno del servidor" });
+    console.error("Error fetching books:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 });
 
@@ -360,22 +362,44 @@ app.get("/api/migrate-authors", (req, res) => {
 });
 
 // GET a specific book by id, including author's name
-app.get("/api/book/:id", async (req, res) => {
+app.get("/api/book", async (req, res) => {
   try {
-    // Cambiado para incluir información del autor
-    const book = await Book.findById(req.params.id).populate("author", "name");
+    // Obtén el ID del libro y el email del usuario desde los parámetros de consulta
+    const bookId = req.query.id;
+    const email = req.query.email;
+
+    if (!bookId || !email) {
+      return res
+        .status(400)
+        .json({ message: "Book ID and email not provided" });
+    }
+
+    // Encuentra el usuario por su email y popula su lista de libros favoritos
+    const user = await User.findOne({ email: email }).populate("favoriteBooks");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Crea un conjunto de IDs de libros favoritos para comprobación rápida
+    const favoriteBookIds = new Set(
+      user.favoriteBooks.map((book) => book._id.toString())
+    );
+
+    // Encuentra el libro por su ID y popula el nombre del autor
+    const book = await Book.findById(bookId).populate("author", "name");
 
     if (!book) {
-      res.status(404).json({ message: "Book not found" });
-    } else {
-      // Crear un objeto de respuesta con el nombre del autor en lugar del ID
-      const bookResponse = {
-        ...book.toObject(), // Convierte el documento de Mongoose a un objeto JS
-        author: book.author ? book.author.name : "Desconocido", // Incluye solo el nombre del autor
-      };
-
-      res.json(bookResponse);
+      return res.status(404).json({ message: "Book not found" });
     }
+
+    // Crea un objeto de respuesta con la información del libro y si es favorito o no
+    const bookResponse = {
+      ...book.toObject(),
+      author: book.author ? book.author.name : "Unknown",
+      isFavorite: favoriteBookIds.has(book._id.toString()),
+    };
+
+    res.json(bookResponse);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
@@ -1139,9 +1163,7 @@ app.delete("/api/delete-author/:id", async (req, res) => {
 // User endpoint
 app.patch("/api/favorite-books-for-user", async (req, res) => {
   try {
-    const { email, bookId } = req.body; // Obtiene los parámetros del cuerpo de la solicitud
-    console.log("email", email);
-    console.log("bookId", bookId);
+    const { email, bookId } = req.body;
 
     const user = await User.findOne({ email: email });
     if (!user) {
