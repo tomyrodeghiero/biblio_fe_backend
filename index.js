@@ -272,6 +272,20 @@ app.get("/api/get-books", async (req, res) => {
   }
 });
 
+app.get("/api/get-book-titles", async (req, res) => {
+  try {
+    const books = await Book.find({}, "title"); // Solo selecciona el campo 'title'
+    const titles = books.map((book) => book.title); // Extrae los títulos en un arreglo
+
+    res.status(200).send({
+      data: titles,
+      total: titles.length,
+    });
+  } catch (error) {
+    res.status(500).send(error);
+  }
+});
+
 app.get("/api/get-pending-books", async (req, res) => {
   try {
     const pendingBooks = await Book.find({ status: "pending" }).populate(
