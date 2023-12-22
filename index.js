@@ -10,15 +10,67 @@ import fs from "fs";
 import path from "path";
 import mongoose from "mongoose";
 import bodyParser from "body-parser";
-mongoose.set("strict", false);
-mongoose.connect(process.env.DB_HOST);
 
+// Importa tus modelos de Mongoose aquí
 import Book from "./models/bookModel.js";
 import User from "./models/userModel.js";
 import Author from "./models/authorModel.js";
 import FriendRequest from "./models/friendRequestModel.js";
 import Notification from "./models/notificationModel.js";
 import Category from "./models/categoryModel.js";
+import Token from "./models/tokenModel.js";
+
+mongoose.set("strict", false);
+mongoose
+  .connect(process.env.DB_HOST)
+  .then(() => {
+    console.log("Conectado a MongoDB");
+    initializeOAuthClient().catch(console.error);
+  })
+  .catch((err) => console.error("No se pudo conectar a MongoDB", err));
+
+const oauth2Client = new google.auth.OAuth2(
+  process.env.CLIENT_ID,
+  process.env.CLIENT_SECRET,
+  process.env.REDIRECT_URI
+);
+
+oauth2Client.on("tokens", async (tokens) => {
+  if (tokens.refresh_token) {
+    await storeRefreshToken(tokens.refresh_token);
+  }
+});
+
+async function initializeOAuthClient() {
+  try {
+    const storedRefreshToken = await getStoredRefreshToken();
+    if (storedRefreshToken) {
+      oauth2Client.setCredentials({ refresh_token: storedRefreshToken });
+      console.log("OAuth client initialized with stored refresh token.");
+    } else {
+      console.log("No stored refresh token found.");
+    }
+  } catch (error) {
+    console.error("Error initializing OAuth client", error);
+  }
+}
+
+const storeRefreshToken = async (refreshToken) => {
+  // Puedes decidir actualizar un token existente o crear uno nuevo
+  const existingToken = await Token.findOne();
+  if (existingToken) {
+    existingToken.refreshToken = refreshToken;
+    await existingToken.save();
+  } else {
+    const token = new Token({ refreshToken });
+    await token.save();
+  }
+};
+
+const getStoredRefreshToken = async () => {
+  const token = await Token.findOne();
+  return token ? token.refreshToken : null;
+};
 
 const app = express();
 app.use(
@@ -37,44 +89,17 @@ app.use(
   })
 );
 
-const oauth2Client = new google.auth.OAuth2(
-  process.env.CLIENT_ID,
-  process.env.CLIENT_SECRET,
-  process.env.REDIRECT_URI
-);
-
-// Configurar credenciales iniciales
-oauth2Client.setCredentials({
-  refresh_token: process.env.REFRESH_TOKEN,
-});
-
-// Manejar actualizaciones de tokens
-oauth2Client.on("tokens", (tokens) => {
+// Evento para manejar actualizaciones de tokens
+oauth2Client.on("tokens", async (tokens) => {
   if (tokens.refresh_token) {
     // Guardar el nuevo token de actualización
-    console.log(`Nuevo token de actualización: ${tokens.refresh_token}`);
-    // Aquí deberías actualizar el token de actualización en tu almacenamiento
+    await storeRefreshToken(tokens.refresh_token);
   }
-  console.log(`Nuevo token de acceso: ${tokens.access_token}`);
-  // Actualizar el token de acceso en tu almacenamiento
 });
 
 const drive = google.drive({ version: "v3", auth: oauth2Client });
 
-// Check if credentials are set
-try {
-  const credentials = {
-    access_token: process.env.ACCESS_TOKEN,
-    refresh_token: process.env.REFRESH_TOKEN,
-    scope: process.env.SCOPE,
-    token_type: process.env.TOKEN_TYPE,
-    expiry_date: process.env.EXPIRY_DATE,
-  };
-  oauth2Client.setCredentials(credentials);
-} catch (error) {
-  console.error("No credentials found", error);
-}
-
+// Ruta de autenticación de Google
 app.get("/auth/google", (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -86,11 +111,16 @@ app.get("/auth/google", (req, res) => {
   res.redirect(url);
 });
 
+// Ruta de redirección de Google
 app.get("/google/redirect", async (req, res) => {
   const { code } = req.query;
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
-  fs.writeFileSync("credentials.json", JSON.stringify(tokens));
+
+  if (tokens.refresh_token) {
+    await storeRefreshToken(tokens.refresh_token);
+  }
+
   res.send("Authenticated");
 });
 
@@ -468,8 +498,11 @@ const uploadToGoogleDrive = async (file) => {
   }
 };
 
-app.post("/api/books", (req, res) => {
+app.post("/api/books", async (req, res) => {
   const form = formidable();
+
+  const refreshToken = await getStoredRefreshToken();
+  console.log("Refresh Token:", refreshToken);
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
