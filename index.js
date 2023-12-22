@@ -502,7 +502,7 @@ app.post("/api/books", (req, res) => {
 
     try {
       // Validar si los archivos están presentes
-      if (!pdfUrl || !coverImage) {
+      if (!pdfUrl) {
         throw new Error("Archivos PDF o de portada faltantes");
       }
 
@@ -510,7 +510,10 @@ app.post("/api/books", (req, res) => {
         pdfUrl,
         "application/pdf"
       );
-      const coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
+      let coverImageUrl;
+      if (coverImage) {
+        coverImageUrl = await uploadToGoogleDrive(coverImage, "image/jpeg");
+      }
 
       // Crear y guardar el nuevo libro
       const newBook = new Book({
@@ -519,7 +522,7 @@ app.post("/api/books", (req, res) => {
         createdBy: createdBy,
         description: description || "",
         pdfUrl: pdfUrlGoogleDrive,
-        coverImageUrl,
+        coverImageUrl: coverImageUrl || "",
         language: language || "",
         tags: tags || [],
         review: review || "",
