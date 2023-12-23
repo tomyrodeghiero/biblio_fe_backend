@@ -18,10 +18,7 @@ const bookSchema = new mongoose.Schema({
   updatedAt: Date,
   rating: Number,
   review: String,
-  category: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Category",
-  },
+  category: String,
   status: {
     type: String,
     enum: ["pending", "approved", "rejected"],

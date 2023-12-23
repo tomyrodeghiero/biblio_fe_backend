@@ -325,8 +325,6 @@ app.get("/api/get-books/:email", async (req, res) => {
       user.favoriteBooks.map((book) => book._id.toString())
     );
 
-    console.log("Favorite book IDs:", favoriteBookIds);
-
     // Find all books in the database and populate their author field
     const books = await Book.find({}).populate("author", "name");
 
@@ -448,6 +446,9 @@ app.patch("/api/edit-book/:id", (req, res) => {
     const status = Array.isArray(fields.status)
       ? fields.status[0]
       : fields.status;
+    const category = Array.isArray(fields.category)
+      ? fields.category[0]
+      : fields.category;
 
     const { coverImage } = files;
 
@@ -473,6 +474,7 @@ app.patch("/api/edit-book/:id", (req, res) => {
         tags,
         review,
         status,
+        category,
         ...(coverImageUrl && { coverImageUrl }),
       };
 
@@ -896,6 +898,16 @@ app.patch("/api/respond-friend-request", async (req, res) => {
       await User.findByIdAndUpdate(requesterId, {
         $addToSet: { friends: recipientId },
       });
+
+      // Crea una notificación para el usuario que envió la solicitud
+      const newNotification = new Notification({
+        recipient: requesterId, // Notificar al usuario que envió la solicitud
+        requester: recipientId, // Usuario que aceptó la solicitud
+        message: `Tu solicitud de amistad ha sido aceptada por ${recipientId}`, // Asegúrate de reemplazar con el nombre del usuario o un identificador adecuado
+        status: "unread",
+      });
+
+      await newNotification.save();
     }
 
     res.status(200).json({ message: "Friend request updated" });
@@ -912,8 +924,10 @@ app.get("/api/get-notifications/:email", async (req, res) => {
       return res.status(404).send("User not found");
     }
 
+    // Obteniendo y ordenando las notificaciones por fecha de creación (las más nuevas primero)
     const notifications = await Notification.find({ recipient: user._id })
       .populate("requester", "email profile.name")
+      .sort({ createdAt: -1 }) // Ordena de forma descendente por 'createdAt'
       .exec();
 
     const transformedNotifications = notifications.map((notification) => {
@@ -944,6 +958,28 @@ app.get("/api/get-notifications/:email", async (req, res) => {
     res.status(200).json(transformedNotifications);
   } catch (error) {
     console.error("Error al obtener las notificaciones:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.patch("/api/mark-notification-read/:id", async (req, res) => {
+  console.log("Marking notification as read");
+  try {
+    const notificationId = req.params.id;
+
+    const updatedNotification = await Notification.findByIdAndUpdate(
+      notificationId,
+      { status: "read" },
+      { new: true }
+    );
+
+    if (!updatedNotification) {
+      return res.status(404).send("Notification not found");
+    }
+
+    res.status(200).json(updatedNotification);
+  } catch (error) {
+    console.error("Error al marcar la notificación como leída:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
