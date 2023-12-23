@@ -802,8 +802,8 @@ app.post("/api/send-friend-request", async (req, res) => {
 });
 
 // Endpoint para verificar el estado de una solicitud de amistad
-app.post("/api/check-friend-request-status", async (req, res) => {
-  const { requesterEmail, recipientEmail } = req.body;
+app.get("/api/check-friend-request-status", async (req, res) => {
+  const { requesterEmail, recipientEmail } = req.query;
 
   try {
     const requester = await User.findOne({ email: requesterEmail });
