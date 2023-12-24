@@ -574,7 +574,6 @@ app.post("/api/books", async (req, res) => {
     const { pdfUrl, coverImage } = files;
 
     try {
-      // Validar si los archivos están presentes
       if (!pdfUrl) {
         throw new Error("Archivos PDF o de portada faltantes");
       }
