@@ -333,7 +333,7 @@ app.get("/api/get-books/:email", async (req, res) => {
       return {
         ...book.toObject(),
         isFavorite: favoriteBookIds.has(book._id.toString()),
-        author: book.author ? book.author.name : "Unknown",
+        author: book.author ? book.author.name : "",
       };
     });
 
@@ -407,7 +407,7 @@ app.get("/api/book", async (req, res) => {
     // Crea un objeto de respuesta con la información del libro y si es favorito o no
     const bookResponse = {
       ...book.toObject(),
-      author: book.author ? book.author.name : "Unknown",
+      author: book.author ? book.author.name : "",
       isFavorite: favoriteBookIds.has(book._id.toString()),
     };
 
@@ -718,7 +718,10 @@ app.get("/api/get-users/:email", async (req, res) => {
   try {
     const { email } = req.params;
 
-    const users = await User.find({ email: { $ne: email } });
+    let users = await User.find({ email: { $ne: email } });
+
+    // Mezclar los usuarios en un orden aleatorio
+    users.sort(() => Math.random() - 0.5);
 
     res.status(200).send(users);
   } catch (error) {
@@ -1356,6 +1359,62 @@ app.patch("/api/approve-all-books", async (req, res) => {
   } catch (error) {
     console.error("Error approving books", error);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+app.delete("/api/delete-all-categories", async (req, res) => {
+  try {
+    await Category.deleteMany({});
+    res
+      .status(200)
+      .json({ message: "Todas las categorías han sido eliminadas" });
+  } catch (error) {
+    console.error("Error al eliminar todas las categorías", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.post("/api/create-multiple-categories", async (req, res) => {
+  try {
+    // Las categorías a crear, ordenadas alfabéticamente
+    const categoriesToCreate = [
+      "Biblia",
+      "Consejería",
+      "Devocionales",
+      "Espíritu Santo",
+      "Estudio Bíblico",
+      "Evangelismo",
+      "Iglesia",
+      "Literatura Cristiana",
+      "Literatura Infantil",
+      "Misión",
+      "Oración",
+    ]
+      .sort()
+      .map((name) => ({ name }));
+
+    // Primero, verificar si alguna de las categorías ya existe
+    const existingCategories = await Category.find({
+      name: { $in: categoriesToCreate.map((cat) => cat.name) },
+    });
+
+    if (existingCategories.length > 0) {
+      return res.status(400).json({
+        message: "Algunas categorías ya existen",
+        existingCategories,
+      });
+    }
+
+    // Insertar todas las categorías nuevas
+    const createdCategories = await Category.insertMany(categoriesToCreate);
+
+    res.status(201).json({
+      message: "Categorías creadas con éxito",
+      createdCategories,
+    });
+  } catch (error) {
+    console.error("Error al crear categorías", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
