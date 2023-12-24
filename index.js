@@ -599,7 +599,7 @@ app.post("/api/books", async (req, res) => {
         language: language || "",
         tags: tags || [],
         review: review || "",
-        category: new ObjectId(category),
+        category: category,
         rating: 5.0,
       });
 
