@@ -126,7 +126,7 @@ app.get("/google/redirect", async (req, res) => {
 
 app.get("/api/get-authors", async (req, res) => {
   try {
-    const authors = await Author.find().populate("books");
+    const authors = await Author.find().populate("books").sort({ name: 1 });
     const totalAuthors = await Author.countDocuments();
 
     res.status(200).json({
@@ -374,7 +374,7 @@ app.get("/api/migrate-authors", (req, res) => {
 });
 
 // GET a specific book by id, including author's name
-app.get("/api/book", async (req, res) => {
+app.get("/api/get-book", async (req, res) => {
   try {
     // Obtén el ID del libro y el email del usuario desde los parámetros de consulta
     const bookId = req.query.id;
