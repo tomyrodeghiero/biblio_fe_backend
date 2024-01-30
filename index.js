@@ -1328,7 +1328,7 @@ app.get("/api/get-statistics/:email", async (req, res) => {
     const categoryCount = await Category.countDocuments({});
     const authorCount = await Author.countDocuments({});
     const userCount = await User.countDocuments({});
-    const ChristianBooksCount = await Book.countDocuments({}); // Agregar await aquí
+    const ChristianBooksCount = await Book.countDocuments({ status: "approved" });
 
     const response = {
       categoryCount,
